@@ -42,15 +42,15 @@ def hist(ax, lbp):
 
 radius = 3
 n_points = 24
-path = './photos/0.jpg'
+path = './photos/pexels-photo-614810.jpeg'
 image = cv2.imread(path)
 window_name = 'image'
-cv2.imshow(window_name, image)
-cv2.waitKey(0)
+
 
 
 roi = mouth_detection(path)
-print(roi)
+cv2.imshow(window_name, roi)
+cv2.waitKey(0)
 
 """
 face = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
