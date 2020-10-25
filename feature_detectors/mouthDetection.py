@@ -3,6 +3,8 @@ import dlib
 import numpy as np
 from imutils import face_utils
 
+FACE_LANDMARKS_DAT_PATH = "C:\\Users\\user\\PycharmProjects\\ImageClassificationMicroservice\\feature_detectors\\shape_predictor_68_face_landmarks.dat"
+
 
 def mouth_detection(imagePath):
     img = cv2.imread(imagePath)
@@ -15,7 +17,7 @@ def mouth_detection(imagePath):
     img = cv2.resize(img, dim, interpolation=cv2.INTER_AREA)
     gray = cv2.cvtColor(src=img, code=cv2.COLOR_BGR2GRAY)
     detector = dlib.get_frontal_face_detector()
-    predictor = dlib.shape_predictor("C:\\Users\\user\\PycharmProjects\\ImageClassificationMicroservice\\feature_detectors\\shape_predictor_68_face_landmarks.dat")
+    predictor = dlib.shape_predictor("%s" % FACE_LANDMARKS_DAT_PATH)
     faces = detector(gray)
     if len(faces) > 0:
         for face in faces:

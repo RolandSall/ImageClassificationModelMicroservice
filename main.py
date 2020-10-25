@@ -1,16 +1,9 @@
-import os
-import sys
 import cv2
 from skimage.color import label2rgb
 import numpy as np
 from feature_detectors.mouthDetection import mouth_detection
 from skimage import feature
 import matplotlib.pyplot as plt
-from PIL import Image
-from imutils import face_utils
-from math import atan2, degrees
-from collections import OrderedDict
-from timeit import default_timer as timer
 
 
 # from flask import Flask
@@ -42,17 +35,11 @@ def hist(ax, lbp):
 
 radius = 3
 n_points = 24
-path = './photos/pexels-photo-614810.jpeg'
+path = './photos/0.jpg'
 image = cv2.imread(path)
 window_name = 'image'
-
-
-
 roi = mouth_detection(path)
-cv2.imshow(window_name, roi)
-cv2.waitKey(0)
 
-"""
 face = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
 hist_face = feature.local_binary_pattern(face, n_points, radius, "uniform")
 fig, (ax_img, ax_hist) = plt.subplots(nrows=2, ncols=3, figsize=(9, 6))
@@ -82,5 +69,5 @@ for ax, labels, name in zip(ax_hist, label_sets, titles):
 ax_hist[0].set_ylabel('Percentage')
 for ax in ax_img:
     ax.axis('off')
-    
-"""
+
+plt.show()
