@@ -1,9 +1,12 @@
+import json
 import cv2
 from skimage.color import label2rgb
 import numpy as np
+from feature_detectors.LocalBinaryPatterns import LocalBinaryPatterns
 from feature_detectors.mouthDetection import mouth_detection
 from skimage import feature
 import matplotlib.pyplot as plt
+import pickle
 
 
 # from flask import Flask
@@ -45,6 +48,17 @@ hist_face = feature.local_binary_pattern(face, n_points, radius, "uniform")
 fig, (ax_img, ax_hist) = plt.subplots(nrows=2, ncols=3, figsize=(9, 6))
 plt.gray()
 
+model = pickle.load(open('toBeImported.sav', 'rb'))
+
+desc = LocalBinaryPatterns(24, 8)
+lbp = desc.describe(path)
+pred = model.predict(lbp)
+
+if pred[0] == 1:
+    predicted = "young"
+else:
+    predicted = "old"
+
 titles = ('edge', 'flat', 'corner')
 w = width = radius - 1
 edge_labels = range(n_points // 2 - w, n_points // 2 + w + 1)
@@ -71,3 +85,5 @@ for ax in ax_img:
     ax.axis('off')
 
 plt.show()
+
+### Using the model
