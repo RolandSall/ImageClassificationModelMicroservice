@@ -1,22 +1,15 @@
 import json
 import os
-from flask import Flask, request, redirect, url_for, flash, jsonify
-from sklearn import metrics, svm
-from sklearn.model_selection import train_test_split
-import os, sys
-import sys
+import pickle
+from math import atan2, degrees
+
 import cv2
 import dlib
 import imutils
-import pickle
-import json
-import numpy as np
-import pandas as pd
-import sklearn
-import skopt
 import matplotlib.pyplot as plt
+import numpy as np
+from flask import Flask, request
 from imutils import face_utils
-from math import atan2, degrees
 
 detector = dlib.get_frontal_face_detector()
 predictor = dlib.shape_predictor(
