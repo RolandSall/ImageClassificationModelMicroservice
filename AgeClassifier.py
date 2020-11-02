@@ -151,7 +151,7 @@ APP_ROOT = os.path.dirname(os.path.abspath(__file__))
 def predict():
     img_path = request.json
     print(img_path)
-    dummyPath = "C:\\Users\\user\\IdeaProjects\\imageclassificationbackend\\testing.jpg"
+    # dummyPath = "C:\\Users\\user\\IdeaProjects\\imageclassificationbackend\\testing.jpg"
     img = cv2.imread(img_path)
     rotated = rotateFace(img)
     rotated = cv2.resize(rotated, (460, 460), interpolation=cv2.INTER_AREA)
@@ -160,7 +160,7 @@ def predict():
     gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
     eq = cv2.equalizeHist(gray)
     imgLBP = Binarypattern(eq)
-    cv2.imshow("asd", imgLBP)
+    cv2.imshow("LBP", imgLBP)
     cv2.waitKey(0)
     vectorLBP = imgLBP.flatten()
     freq, lbph, _ = plt.hist(vectorLBP, bins=2 ** 8)
