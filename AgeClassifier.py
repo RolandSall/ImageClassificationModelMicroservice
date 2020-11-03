@@ -213,9 +213,11 @@ def predict():
         imgLBP = Binarypattern(gray_img)  # calling the LBP function using gray image
         vectorLBP = imgLBP.flatten()  # for histogram using the vector form of image pixels
         # cv2.imwrite('data/dst/lena_opencv_red.jpg', vectorLBP)
-        # To visualize the graphs uncomment
+
     except:
         return {"error": "could not detect age"}
+
+    # To visualize the graphs uncomment
     '''
     fig = plt.figure(figsize=(20, 8))  # sub plotting the gray, LBP and histogram
     ax = fig.add_subplot(1, 4, 1)
