@@ -146,6 +146,42 @@ def full_face_detection_face_detector(img):
     return []
 
 
+def centerImage(img):
+    points = []
+    right_eye = []
+    left_eye = []
+    imgH, imgW, imgC = img.shape
+
+    gray = cv2.cvtColor(src=img, code=cv2.COLOR_BGR2GRAY)
+    roi = []
+    faces = detector(gray)
+    if faces:
+        for face in faces:
+            x1 = face.left()  # left point
+            y1 = face.top()  # top point
+            x2 = face.right()  # right point
+            y2 = face.bottom()  # bottom point
+            landmarks = predictor(image=gray, box=face)
+
+        imgH, imgW, imgC = img.shape
+        for (name, (i, j)) in face_utils.FACIAL_LANDMARKS_IDXS.items():
+            if name == "right_eye" or name == "left_eye":
+                for n in range(i, j):
+                    x = landmarks.part(n).x
+                    y = landmarks.part(n).y
+                    points.append([x, y])
+
+        (x, y, w, h) = cv2.boundingRect(np.array([points]))
+        width = imgH / 1.25
+        add = int((width - w) / 2)
+        left_edge = x
+        right_edge = imgW - x - w
+        eff = min(left_edge, right_edge)
+        if add > eff:
+            add = eff
+        return img[0: imgH, x - add: x + w + add]
+
+
 app = Flask(__name__)
 APP_ROOT = os.path.dirname(os.path.abspath(__file__))
 with open('./models/full_face_knn (2).pkl', 'rb') as input:
@@ -158,6 +194,7 @@ def predict():
     print(img_path)
     # dummyPath = "C:\\Users\\user\\IdeaProjects\\imageclassificationbackend\\testing.jpg"
     img = cv2.imread(img_path)
+    img = centerImage(img)
     img = cv2.resize(img, (460, 460), interpolation=cv2.INTER_AREA)
     rotated = rotateFace(img)
     roi = full_face_detection_face_detector(rotated)
