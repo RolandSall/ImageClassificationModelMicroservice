@@ -1,12 +1,11 @@
 import json
 import os
-import pickle
 from math import atan2, degrees
-
 import cv2
 import dlib
-import imutils
+import pickle
 import matplotlib.pyplot as plt
+import imutils
 import numpy as np
 from flask import Flask, request
 from imutils import face_utils
@@ -14,6 +13,12 @@ from imutils import face_utils
 detector = dlib.get_frontal_face_detector()
 predictor = dlib.shape_predictor(
     "C:\\Users\\user\\PycharmProjects\\ImageClassificationMicroservice\\shape_predictor_68_face_landmarks.dat")
+
+
+class full_pipelined_model(object):
+    def __init__(self, model, scaler):
+        self.model = model
+        self.scaler = scaler
 
 
 def Binarypattern(im):
@@ -86,16 +91,13 @@ def rotateFace(img):
     return []
 
 
-def mid_face_detection_face_detector(img):
-    points = []
-    right_eye = []
-    left_eye = []
-    imgH, imgW, imgC = img.shape
-
+def full_face_detection_face_detector(img):
     gray = cv2.cvtColor(src=img, code=cv2.COLOR_BGR2GRAY)
-    roi = []
     faces = detector(gray)
-    if (faces):
+    jaw = []
+    right_eyebrow = []
+    left_eyebrow = []
+    if len(faces) > 0:
         for face in faces:
             x1 = face.left()  # left point
             y1 = face.top()  # top point
@@ -103,41 +105,51 @@ def mid_face_detection_face_detector(img):
             y2 = face.bottom()  # bottom point
             landmarks = predictor(image=gray, box=face)
 
-        imgH, imgW, imgC = img.shape
         for (name, (i, j)) in face_utils.FACIAL_LANDMARKS_IDXS.items():
-            if (name == "right_eye" or name == "left_eye"):
+            if name == "jaw" or name == "right_eyebrow" or name == "left_eyebrow":
                 for n in range(i, j):
                     x = landmarks.part(n).x
                     y = landmarks.part(n).y
-                    points.append([x, y])
+                    if x < 0:
+                        x = 0
+                    if y < 0:
+                        y = 0
                     locals()[name].append([x, y])
 
-        (x, y, w, h) = cv2.boundingRect(np.array([points]))
+        kernel = np.ones((3, 3), np.float32) / 18
+        gf = cv2.filter2D(img, -1, kernel)
 
-        addTop = int(imgH * 0.17)
-        addBottom = int(imgH * 0.08)
-        addLeft = int(imgW * 0.06)
-        addRight = int(imgW * 0.06)
+        pts = []
 
-        if x < addLeft:
-            addLeft = x
-        if (imgW - x) < addRight:
-            addRight = imgW - x + (addRight - x)
-        if y < addTop:
-            addTop = y
-        roi = img[y - addTop:y + h + addBottom, x - addLeft: x + w + addRight]
+        del right_eyebrow[0]
+        right_eyebrow = right_eyebrow[::-1]
 
-        return roi
+        del left_eyebrow[0]
+        left_eyebrow = left_eyebrow[::-1]
+
+        pts = jaw + left_eyebrow + right_eyebrow
+        pts = np.array(pts)
+
+        rect = cv2.boundingRect(pts)
+        x, y, w, h = rect
+        cropped = gf[y:y + h, x:x + w].copy()
+        pts = pts - pts.min(axis=0)
+
+        mask = np.zeros(cropped.shape[:2], np.uint8)
+        cv2.drawContours(mask, [pts], -1, (255, 255, 255), -1, cv2.LINE_AA)
+        dst = cv2.bitwise_and(cropped, cropped, mask=mask)
+        bg = np.ones_like(cropped, np.uint8) * 255
+        cv2.bitwise_not(bg, bg, mask=mask)
+        dst2 = bg + dst
+
+        return dst2
     return []
 
 
-model_path = 'models/svm-age-3categories-Faces.sav'
-scaler_path = 'scalars/scalerFacesMidFace.pkl'
-model = pickle.load(open(model_path, 'rb'))
-scaler = pickle.load(open(scaler_path, 'rb'))
-
 app = Flask(__name__)
 APP_ROOT = os.path.dirname(os.path.abspath(__file__))
+with open('./models/full_face_knn (2).pkl', 'rb') as input:
+    pp = pickle.load(input)
 
 
 @app.route('/predict', methods=['POST'])
@@ -146,31 +158,55 @@ def predict():
     print(img_path)
     # dummyPath = "C:\\Users\\user\\IdeaProjects\\imageclassificationbackend\\testing.jpg"
     img = cv2.imread(img_path)
+    img = cv2.resize(img, (460, 460), interpolation=cv2.INTER_AREA)
     rotated = rotateFace(img)
-    rotated = cv2.resize(rotated, (460, 460), interpolation=cv2.INTER_AREA)
-    rotated = cv2.GaussianBlur(rotated, (3, 3), 0)
-    roi = mid_face_detection_face_detector(rotated)
-    gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-    eq = cv2.equalizeHist(gray)
-    imgLBP = Binarypattern(eq)
-    cv2.imshow("LBP", imgLBP)
-    cv2.waitKey(0)
-    vectorLBP = imgLBP.flatten()
-    freq, lbph, _ = plt.hist(vectorLBP, bins=2 ** 8)
-    freq = scaler.fit_transform([freq])
-    pred = model.predict(freq)
-    if pred == 0:
-        data_message = {"output": "Middle-Age"}
-        print(data_message)
-        return json.dumps(data_message)
-    if pred == 2:
-        data_message = {"output": "Young"}
-        print(data_message)
-        return json.dumps(data_message)
-    if pred == 1:
-        data_message = {"output": "Old"}
-        print(data_message)
-        return json.dumps(data_message)
+    roi = full_face_detection_face_detector(rotated)
+    if len(roi) == 0:
+        print("Could not detect")
+        return {"error": "could not detect age"}
+    roi = cv2.resize(roi, (460, 460), interpolation=cv2.INTER_AREA)
+    gray_img = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+    gray_img = cv2.equalizeHist(gray_img)
+    gray_img = cv2.equalizeHist(gray_img)
+    gray_img = cv2.equalizeHist(gray_img)
+    imgLBP = Binarypattern(gray_img)  # calling the LBP function using gray image
+    vectorLBP = imgLBP.flatten()  # for histogram using the vector form of image pixels
+    # cv2.imwrite('data/dst/lena_opencv_red.jpg', vectorLBP)
+    # To visualize the graphs uncomment
+    '''
+    fig = plt.figure(figsize=(20, 8))  # sub plotting the gray, LBP and histogram
+    ax = fig.add_subplot(1, 4, 1)
+    ax.imshow(cv2.cvtColor(roi, cv2.COLOR_BGR2RGB))
+    ax.set_title("Image")
+    ax = fig.add_subplot(1, 4, 2)
+    ax.imshow(gray_img, cmap="gray")
+    ax.set_title("Gray and Equalized Image")
+    ax = fig.add_subplot(1, 4, 3)
+    ax.imshow(imgLBP, cmap="gray")
+    ax.set_title("LBP converted image")
+    ax = fig.add_subplot(1, 4, 4)
+    maxF = freq.max()
+    ax.set_ylim(0, maxF + 1000)
+    lbp = lbp[:-1]
+    largeTF = freq > 5000
+    # for x, fr in zip(lbp[largeTF], freq[largeTF]):
+    #    ax.text(x, fr, "{:6.0f}".format(x), color="magenta")
+    # ax.set_title("LBP histogram")
+    # plt.show()
+    '''
+
+    freq, lbp, _ = plt.hist(vectorLBP, bins=2 ** 8)
+    X = pp.scaler.transform([freq])
+    result = pp.model.predict_proba(X)
+    print(result)
+    resultJson = {
+        "young": "{}".format((result[0][0])),
+        "middleAge": "{}".format(result[0][1]),
+        "old": "{}".format(result[0][2]),
+        "error": ""
+    }
+
+    return json.dumps(resultJson)
 
 
 if __name__ == "__main__":
