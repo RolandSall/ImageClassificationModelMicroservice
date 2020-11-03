@@ -10,37 +10,44 @@ import numpy as np
 from flask import Flask, request
 from imutils import face_utils
 
+### Directory to print the images that will be sent to the front-end
+DIRC = "C:\\Users\\user\\WebstormProjects\\image_classification_front_end\\src\\Commun\\resources\\imagesLBP\\"
+
+### Detector and predictor for facial detection
 detector = dlib.get_frontal_face_detector()
 predictor = dlib.shape_predictor(
     "C:\\Users\\user\\PycharmProjects\\ImageClassificationMicroservice\\shape_predictor_68_face_landmarks.dat")
 
 
+### To extract the model and scaler in case they are saved in the model
 class full_pipelined_model(object):
     def __init__(self, model, scaler):
         self.model = model
         self.scaler = scaler
 
 
+### LBP method
 def Binarypattern(im):
     img = np.zeros_like(im)
-    n = 3  # taking kernel of size 3*3
-    for i in range(0, im.shape[0] - n):  # for image height
-        for j in range(0, im.shape[1] - n):  # for image width
-            x = im[i:i + n, j:j + n]  # reading the entire image in 3*3 format
-            center = x[1, 1]  # taking the center value for 3*3 kernel
+    n = 3                                                                                   # taking kernel of size 3*3
+    for i in range(0, im.shape[0] - n):                                                     # for image height
+        for j in range(0, im.shape[1] - n):                                                 # for image width
+            x = im[i:i + n, j:j + n]                                                        # reading the entire image in 3*3 format
+            center = x[1, 1]                                                                # taking the center value for 3*3 kernel
             img1 = (
-                           x >= center) * 1.0  # checking if neighbouring values of center value is greater or less than center value
-            img1_vector = img1.T.flatten()  # getting the image pixel values
+                           x >= center) * 1.0                                               # Checking if neighbouring values of center value is greater or less than center value
+            img1_vector = img1.T.flatten()                                                  # Getting the image pixel values
             img1_vector = np.delete(img1_vector, 4)
             digit = np.where(img1_vector)[0]
-            if len(digit) >= 1:  # converting the neighbouring pixels according to center pixel value
-                num = np.sum(2 ** digit)  # if n> center assign 1 and if n<center assign 0
-            else:  # if 1 then multiply by 2^digit and if 0 then making value 0 and aggregating all the values of kernel to get new center value
+            if len(digit) >= 1:                                                             # Converting the neighbouring pixels according to center pixel value
+                num = np.sum(2 ** digit)                                                    # if n> center assign 1 and if n<center assign 0
+            else:                                                                           # if 1 then multiply by 2^digit and if 0 then making value 0 and aggregating all the values of kernel to get new center value
                 num = 0
             img[i + 1, j + 1] = num
     return img
 
 
+### Method to rotate the face for better detection
 def rotateFace(img):
     points = []
 
@@ -55,10 +62,10 @@ def rotateFace(img):
         left_eyebrow = []
 
         for face in faces:
-            x1 = face.left()  # left point
-            y1 = face.top()  # top point
-            x2 = face.right()  # right point
-            y2 = face.bottom()  # bottom point
+            x1 = face.left()                                                                        # left point
+            y1 = face.top()                                                                         # top point
+            x2 = face.right()                                                                       # right point
+            y2 = face.bottom()                                                                      # bottom point
             landmarks = predictor(image=gray, box=face)
 
         for (name, (i, j)) in face_utils.FACIAL_LANDMARKS_IDXS.items():
@@ -84,13 +91,13 @@ def rotateFace(img):
             angle = degrees(atan2(yDiff, xDiff))
 
         # (x, y, w, h) = cv2.boundingRect(np.array([[x1,y1],[x2,y2]]))
-
         # roi = img[y: y + h , x : x + w ]
         rotated = imutils.rotate(img, angle)
         return rotated
     return []
 
 
+### Method to detect the full face
 def full_face_detection_face_detector(img):
     gray = cv2.cvtColor(src=img, code=cv2.COLOR_BGR2GRAY)
     faces = detector(gray)
@@ -99,10 +106,10 @@ def full_face_detection_face_detector(img):
     left_eyebrow = []
     if len(faces) > 0:
         for face in faces:
-            x1 = face.left()  # left point
-            y1 = face.top()  # top point
-            x2 = face.right()  # right point
-            y2 = face.bottom()  # bottom point
+            x1 = face.left()                                                                # left point
+            y1 = face.top()                                                                 # top point
+            x2 = face.right()                                                               # right point
+            y2 = face.bottom()                                                              # bottom point
             landmarks = predictor(image=gray, box=face)
 
         for (name, (i, j)) in face_utils.FACIAL_LANDMARKS_IDXS.items():
@@ -146,6 +153,7 @@ def full_face_detection_face_detector(img):
     return []
 
 
+### Method to center the image in the face is not centered at the middle
 def centerImage(img):
     points = []
     right_eye = []
@@ -193,29 +201,34 @@ with open('./models/full_face_knn (2).pkl', 'rb') as input:
     pp = pickle.load(input)
 
 
+### Flask API to call the predictor
 @app.route('/predict', methods=['POST'])
 def predict():
     img_path = request.json
     print(img_path)
-    # dummyPath = "C:\\Users\\user\\IdeaProjects\\imageclassificationbackend\\testing.jpg"
-    img = cv2.imread(img_path)
+    img = cv2.imread(img_path)                                                  # Read the image
     try:
-        img = centerImage(img)
-        img = cv2.resize(img, (460, 460), interpolation=cv2.INTER_AREA)
-
-        rotated = rotateFace(img)
-        roi = full_face_detection_face_detector(rotated)
-        roi = cv2.resize(roi, (460, 460), interpolation=cv2.INTER_AREA)
-        gray_img = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-        gray_img = cv2.equalizeHist(gray_img)
-        gray_img = cv2.equalizeHist(gray_img)
-        gray_img = cv2.equalizeHist(gray_img)
-        imgLBP = Binarypattern(gray_img)  # calling the LBP function using gray image
-        vectorLBP = imgLBP.flatten()  # for histogram using the vector form of image pixels
-        # cv2.imwrite('data/dst/lena_opencv_red.jpg', vectorLBP)
-
+        img = centerImage(img)                                                  # Center the image
+        img = cv2.resize(img, (460, 460), interpolation=cv2.INTER_AREA)         # Resize Again
+        cv2.imwrite(                                                            # Send the resized imaged to Front-End
+            "%sresize.jpg" % DIRC, img)
+        rotated = rotateFace(img)                                               # Rotate image
+        cv2.imwrite(                                                            # Send the rotated image to Front-End
+            "%srotate.jpg" % DIRC,
+            rotated)
+        roi = full_face_detection_face_detector(rotated)                        # Detect The Face
+        roi = cv2.resize(roi, (460, 460), interpolation=cv2.INTER_AREA)         # Resize the Detected Face
+        gray_img = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)                        # Gray Scale the Image
+        cv2.imwrite("%sgrayScale.jpg" % DIRC, gray_img)                         # Send the Gray Scale Image to Front-End
+        gray_img = cv2.equalizeHist(gray_img)                                   # Equalize  1st time
+        gray_img = cv2.equalizeHist(gray_img)                                   # Equalize  2nd time
+        gray_img = cv2.equalizeHist(gray_img)                                   # Equalize  3rd time
+        cv2.imwrite("%seqlvl3.jpg" % DIRC, gray_img)                            # Send the Latest Equalized Image
+        imgLBP = Binarypattern(gray_img)                                        # Call LBP after the above pre processing
+        cv2.imwrite("%seqlvl4.jpg" % DIRC, imgLBP)
+        vectorLBP = imgLBP.flatten()                                            # For histogram using the vector form of image pixels
     except:
-        return {"error": "could not detect age"}
+        return {"error": "could not detect age"}                                # Throw an Error if an image is not detected
 
     # To visualize the graphs uncomment
     '''
@@ -240,9 +253,9 @@ def predict():
     # plt.show()
     '''
 
-    freq, lbp, _ = plt.hist(vectorLBP, bins=2 ** 8)
-    X = pp.scaler.transform([freq])
-    result = pp.model.predict_proba(X)
+    freq, lbp, _ = plt.hist(vectorLBP, bins=2 ** 8)                                 # extract the frequency
+    X = pp.scaler.transform([freq])                                                 # Get the X from the frequency while using the Scalar
+    result = pp.model.predict_proba(X)                                              # Pass the scaled X to the Model
     print(result)
     resultJson = {
         "young": "{}".format((result[0][0])),
@@ -251,8 +264,8 @@ def predict():
         "error": ""
     }
 
-    return json.dumps(resultJson)
+    return json.dumps(resultJson)                                                   # Send back the Result to the Java Service
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":                                                          # Main app to run flask on localhost:5000
     app.run()
