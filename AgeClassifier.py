@@ -155,6 +155,11 @@ def centerImage(img):
     gray = cv2.cvtColor(src=img, code=cv2.COLOR_BGR2GRAY)
     roi = []
     faces = detector(gray)
+    try:
+        faces[0]
+    except:
+        return {"error": "could not detect age"}
+
     if faces:
         for face in faces:
             x1 = face.left()  # left point
@@ -194,22 +199,23 @@ def predict():
     print(img_path)
     # dummyPath = "C:\\Users\\user\\IdeaProjects\\imageclassificationbackend\\testing.jpg"
     img = cv2.imread(img_path)
-    img = centerImage(img)
-    img = cv2.resize(img, (460, 460), interpolation=cv2.INTER_AREA)
-    rotated = rotateFace(img)
-    roi = full_face_detection_face_detector(rotated)
-    if len(roi) == 0:
-        print("Could not detect")
+    try:
+        img = centerImage(img)
+        img = cv2.resize(img, (460, 460), interpolation=cv2.INTER_AREA)
+
+        rotated = rotateFace(img)
+        roi = full_face_detection_face_detector(rotated)
+        roi = cv2.resize(roi, (460, 460), interpolation=cv2.INTER_AREA)
+        gray_img = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+        gray_img = cv2.equalizeHist(gray_img)
+        gray_img = cv2.equalizeHist(gray_img)
+        gray_img = cv2.equalizeHist(gray_img)
+        imgLBP = Binarypattern(gray_img)  # calling the LBP function using gray image
+        vectorLBP = imgLBP.flatten()  # for histogram using the vector form of image pixels
+        # cv2.imwrite('data/dst/lena_opencv_red.jpg', vectorLBP)
+        # To visualize the graphs uncomment
+    except:
         return {"error": "could not detect age"}
-    roi = cv2.resize(roi, (460, 460), interpolation=cv2.INTER_AREA)
-    gray_img = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-    gray_img = cv2.equalizeHist(gray_img)
-    gray_img = cv2.equalizeHist(gray_img)
-    gray_img = cv2.equalizeHist(gray_img)
-    imgLBP = Binarypattern(gray_img)  # calling the LBP function using gray image
-    vectorLBP = imgLBP.flatten()  # for histogram using the vector form of image pixels
-    # cv2.imwrite('data/dst/lena_opencv_red.jpg', vectorLBP)
-    # To visualize the graphs uncomment
     '''
     fig = plt.figure(figsize=(20, 8))  # sub plotting the gray, LBP and histogram
     ax = fig.add_subplot(1, 4, 1)
