@@ -8,6 +8,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from flask import Flask, request
 from imutils import face_utils
+from tensorflow import keras
+import tensorflow as tf
+from skimage import transform
 
 app = Flask(__name__)
 
@@ -19,8 +22,9 @@ class full_pipelined_model(object):
 
 
 detector = dlib.get_frontal_face_detector()
-predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
-DIRC = "C:\\Users\\user\\WebstormProjects\\image_classification_front_end\\src\\Commun\\resources\\imagesLBP\\"
+predictor = dlib.shape_predictor("C:\\Users\\User\\PycharmProjects\\ImageClassificationModelMicroservice"
+                                 "\\shape_predictor_68_face_landmarks.dat")
+DIRC = "C:\\Users\\User\\WebstormProjects\\ImageClassificationFrontEnd\\src\\Commun\\resources\\imagesLBP\\"
 
 
 def Binarypattern(im):
@@ -300,21 +304,40 @@ def lbp_freq(roi):
     return gray_img, eq, imgLBP, freq
 
 
+def ANN_PP(img):
+    np_image = np.array(img).astype('float32') / 255
+    np_image = np.expand_dims(np_image, axis=0)
+    return np_image
+
+
+def processImgForANN(img_path):
+    imgANN = tf.keras.preprocessing.image.load_img(
+        img_path, color_mode="rgb", target_size=(150, 150), interpolation="nearest"
+    )
+    open_cv_image = np.array(imgANN)
+    return ANN_PP(open_cv_image)
+
+
 # The below part is to import our model that was trained on colab and saved as pkl file in this directory
-with open('full_face_knn.pkl', 'rb') as input:
+with open('C:\\Users\\User\\PycharmProjects\\ImageClassificationModelMicroservice\\full_face_knn.pkl', 'rb') as input:
     ffMS = pickle.load(input)
 
-with open('mid_face_knn.pkl', 'rb') as input:
+with open('C:\\Users\\User\\PycharmProjects\\ImageClassificationModelMicroservice\\mid_face_knn.pkl', 'rb') as input:
     mfMS = pickle.load(input)
 
-with open('mouth_knn.pkl', 'rb') as input:
+with open('C:\\Users\\User\\PycharmProjects\\ImageClassificationModelMicroservice\\mouth_knn.pkl', 'rb') as input:
     mMS = pickle.load(input)
+
+mANN = keras.models.load_model(
+    'C:\\Users\\User\\PycharmProjects\\ImageClassificationModelMicroservice\\ANN_INCEPTION_LBP_FULL_FACE.h5')
 
 
 @app.route('/predict', methods=['POST'])
 def predict():
     # Getting the PATH for the JAVA service and performing pre processing techniques such as resize, and color change
-    img_path = request.json
+    jsonRequest = json.loads(request.json)
+    ownModel = jsonRequest["ownModel"]
+    img_path = jsonRequest["path"]
     print(img_path)
     img = cv2.imread(img_path)
     img = centerImage(img)
@@ -324,6 +347,7 @@ def predict():
     if len(rotated) == 0:
         rotated = rotateFace(img)
 
+    full_face_matrix_path = 'ff.png'
     # Sending a rotated picture to the Front-End resource directory
     cv2.imwrite("%srotate.jpg" % DIRC, rotated)
 
@@ -356,31 +380,93 @@ def predict():
     cv2.imwrite(
         "%sLBPM.jpg" % DIRC, imgLBPM)
 
+    cv2.imwrite(full_face_matrix_path, imgLBPFF)
+
     Xff = ffMS.scaler.transform([lbpff])
     Xmf = mfMS.scaler.transform([lbpmf])
     Xm = mMS.scaler.transform([lbpm])
+    p = mANN.predict(processImgForANN(full_face_matrix_path))
+    ANN_Result = np.array([p[0][2], p[0][0], p[0][1]])
 
     ## Assigning Weights based on a girdSearch to reach the most efficient feature
-    result = ffMS.model.predict_proba(Xff) * 0.266666 + mfMS.model.predict_proba(
-        Xmf) * 0.0666666 + mMS.model.predict_proba(Xm) * 0.66666666
+    result = ffMS.model.predict_proba(Xff) * 0.06667 + mfMS.model.predict_proba(Xmf) * 0.06667 + mMS.model.predict_proba(
+        Xm) * 0.6667 + ANN_Result * 0.2
+    print(ANN_Result[0])
+
+    print(ownModel)
+    if (ownModel=="true"):
+        print(jsonRequest["clf1"],
+              jsonRequest["clf2"],
+              jsonRequest["clf3"])
+        with open('C:\\Users\\User\\PycharmProjects\\ImageClassificationTrainerMicroService\\savedModels\\{}'.format(
+                jsonRequest["clf1"]+".sav"), 'rb') as input:
+            clf1 = pickle.load(input)
+        with open('C:\\Users\\User\\PycharmProjects\\ImageClassificationTrainerMicroService\savedModels\\{}'.format(
+                jsonRequest["clf2"]+".sav"), 'rb') as input:
+            clf2 = pickle.load(input)
+        with open('C:\\Users\\User\\PycharmProjects\\ImageClassificationTrainerMicroService\savedModels\\{}'.format(
+                jsonRequest["clf3"]+".sav"), 'rb') as input:
+            clf3 = pickle.load(input)
+        ans = clf1.predict_proba([lbpm])
+        print(ans[0][0])
+        print(ans[0][1])
+        print(ans[0][2])
+        ans1 = clf2.predict_proba([lbpmf])
+        print(ans1[0][0])
+        print(ans1[0][1])
+        print(ans1[0][2])
+        ans2 = clf3.predict_proba([lbpff])
+        print(ans2[0][0])
+        print(ans2[0][1])
+        print(ans2[0][2])
+
+        print('----------------------------------------------')
+        print(ans[0][0]*0.33 + ans1[0][0]*0.33 + ans2[0][0]*0.33)
+        print(ans[0][1]*0.33 + ans1[0][1]*0.33 + ans2[0][1]*0.33)
+        print(ans[0][2]*0.33 + ans1[0][2]*0.33 + ans2[0][2]*0.33)
+
+        resultJson = {
+            "youngM": "{}".format(ans[0][0]*0.33),
+            "middleAgeM": "{}".format(ans[0][1]*0.33),
+            "oldM": "{}".format(ans[0][2]*0.33),
+            "weightM": "0.33",
+            "youngMF": "{}".format(ans1[0][0]*0.33),
+            "middleAgeMF": "{}".format(ans1[0][1]*0.33),
+            "oldMF": "{}".format(ans1[0][2]*0.33),
+            "weightMF": "0.33",
+            "youngFF": "{}".format(ans2[0][0]*0.33),
+            "middleAgeFF": "{}".format(ans2[0][1]*0.33),
+            "oldFF": "{}".format(ans2[0][2]*0.33),
+            "young": "{}".format(ans[0][0]*0.33 + ans1[0][0]*0.33 + ans2[0][0]*0.33),
+            "middleAge": "{}".format(ans[0][1]*0.33 + ans1[0][1]*0.33 + ans2[0][1]*0.33),
+            "old": "{}".format(ans[0][2]*0.33 + ans1[0][2]*0.33 + ans2[0][2]*0.33),
+            "weightFF": "0.33",
+        }
+        print(clf1,clf2,clf3)
+        print(resultJson)
+        return json.dumps(resultJson)
 
     print(result)
     resultJson = {
         "youngFF": "{}".format(ffMS.model.predict_proba(Xff)[0][0]),
         "middleAgeFF": "{}".format(ffMS.model.predict_proba(Xff)[0][1]),
         "oldFF": "{}".format(ffMS.model.predict_proba(Xff)[0][2]),
-        "weightFF": "0.266666",
+        "weightFF": "0.06667",
         "youngMF": "{}".format(mfMS.model.predict_proba(Xmf)[0][0]),
         "middleAgeMF": "{}".format(mfMS.model.predict_proba(Xmf)[0][1]),
         "oldMF": "{}".format(mfMS.model.predict_proba(Xmf)[0][2]),
-        "weightMF": "0.0666666",
+        "weightMF": "0.06667",
         "youngM": "{}".format(mMS.model.predict_proba(Xm)[0][0]),
         "middleAgeM": "{}".format(mMS.model.predict_proba(Xm)[0][1]),
         "oldM": "{}".format(mMS.model.predict_proba(Xm)[0][2]),
-        "weightM": "0.66666666",
+        "weightM": "0.6667",
         "young": "{}".format((result[0][0])),
         "middleAge": "{}".format(result[0][1]),
         "old": "{}".format(result[0][2]),
+        "youngAnn": "{}".format(float("{}".format(ANN_Result[0]))),
+        "middleAnn": "{}".format(float("{}".format(ANN_Result[1]))),
+        "oldAnn": "{}".format(float("{}".format(ANN_Result[2]))),
+        "weightAnn": "0.20",
         "error": ""
     }
 
